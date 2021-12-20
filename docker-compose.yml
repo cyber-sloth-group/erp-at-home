@@ -1,0 +1,78 @@
+version: "3.9"
+services:
+
+  redis:
+    image: redis
+    ports:
+      - "6379:6379"
+
+  postgres:
+    image: postgres
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=Pa55w0rd
+      - POSTGRES_DB=erp-at-home
+
+  caddy:
+    image: caddy
+    ports:
+      - "80:80"
+    volumes:
+      - caddy-config:/etc/caddy
+      - caddy-web:/var/www/html
+
+  elasticsearch:
+    image: elasticsearch:7.16.1
+    container_name: elasticsearch
+    hostname: elasticsearch
+    environment:
+      - "ES_JAVA_OPTS=-Xmx2g -Xms256m"
+      - "discovery.type=single-node"
+    ports:
+      - 9200:9200
+      - 9300:9300
+    healthcheck:
+      test: curl -s https://localhost:9200 >/dev/null; if [[ $$? == 52 ]]; then echo 0; else echo 1; fi
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  kibana:
+    image: kibana:7.16.1
+    container_name: kibana
+    hostname: kibana
+    environment:
+      ELASTICSEARCH_URL: http://elasticsearch:9200
+      ELASTICSEARCH_HOSTS: http://elasticsearch:9200
+    ports:
+      - 5601:5601
+    links:
+      - elasticsearch:elasticsearch
+    depends_on: {"elasticsearch": {"condition": "service_healthy"}}
+
+  logstash:
+    image: logstash:7.16.1
+    container_name: logstash
+    hostname: logstash
+    ports:
+      - 9600:9600
+      - 8089:8089
+    volumes:
+      - logstash:/usr/share/logstash/pipeline/
+    links:
+      - elasticsearch:elasticsearch
+    environment:
+      - "LS_JAVA_OPTS=-Xmx2g -Xms256m"
+    depends_on:
+      - elasticsearch
+
+volumes:
+  postgres-data: {}
+  caddy-config: {}
+  caddy-web: {}
+  elasticsearch-data: {}
+  logstash: {}
